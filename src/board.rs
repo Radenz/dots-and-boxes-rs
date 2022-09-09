@@ -1,6 +1,6 @@
 use std::{cell::RefCell, fmt::Display, rc::Rc};
 
-use crate::tile::{Chain, ChainBuilder, Loop, Position, Tile, TileIndex, POSITIONS};
+use crate::tile::{Chain, ChainBuilder, Loop, LoopBuilder, Position, Tile, TileIndex, POSITIONS};
 
 type Matrix<T> = Vec<Vec<T>>;
 
@@ -89,9 +89,9 @@ impl Board {
         chains
     }
 
-    pub fn get_loop(&mut self) -> Vec<Loop> {
+    pub fn get_loops(&mut self) -> Vec<Loop> {
         let mut has_evaluated = vec![vec![false; 3]; 3];
-        let mut loops: Vec<Loop> = vec![];
+        let mut loops = vec![];
         let mut indices = vec![];
 
         for x in 0..3 {
@@ -102,49 +102,55 @@ impl Board {
                     let mut tile = self.get_tile((x, y));
                     let tile_ref = tile.borrow();
 
-                    if !tile_ref.is_path() || tile_ref.open_to_outside() {
+                    if !tile_ref.is_path() {
                         continue;
                     }
 
                     let mut last_pos = None;
-                    let mut tile_index = tile_ref.index();
 
                     drop(tile_ref);
 
                     // let tile_loop = vec![];
+                    let mut builder = LoopBuilder::new(tile.clone());
+                    let mut is_loop = false;
 
-                    while tile_index != (x, y) {
+                    loop {
                         let nb = self.get_connected_neighbor(tile.clone(), last_pos);
 
                         if let Some((neighbor, lp)) = nb {
                             tile = neighbor;
                             last_pos = Some(lp);
 
-                            indices.push(tile.borrow().index());
-                            // tile_loop.push()
+                            let tile_index = tile.borrow().index();
+                            has_evaluated[tile_index.0][tile_index.1] = true;
+                            if tile_index == (x, y) {
+                                is_loop = true;
+                                break;
+                            }
 
+                            indices.push(tile.borrow().index());
                             if !tile.borrow().is_path() {
                                 break;
                             }
+                            builder.add(&tile);
                         } else {
                             break;
                         }
-
-                        tile_index = tile.borrow().index();
                     }
 
                     // Reset has eval if loop finding failed
-                    if tile_index != (x, y) {
+                    if is_loop {
+                        loops.push(builder.build());
+                    } else {
                         for &(x, y) in indices.iter() {
                             has_evaluated[x][y] = false;
                         }
-                    } else {
                     }
                 }
             }
         }
 
-        todo!()
+        loops
     }
 
     fn get_connected_neighbor(
@@ -154,7 +160,7 @@ impl Board {
     ) -> Option<(Rc<RefCell<Tile>>, Position)> {
         for &pos in POSITIONS.iter() {
             if let Some(igored_pos) = without {
-                if pos == igored_pos {
+                if pos == igored_pos.invert() {
                     continue;
                 }
             }
@@ -637,7 +643,7 @@ fn v_line(cond: bool) -> String {
 
 #[cfg(test)]
 mod tests {
-    use crate::tile::Position;
+    use crate::tile::{Position, BOTTOM_RIGHT, CENTER, MIDDLE_LEFT, TOP_CENTER, TOP_LEFT};
 
     use super::Board;
 
@@ -683,5 +689,26 @@ mod tests {
         println!();
 
         println!("Chains = {}", board.get_chains().len());
+    }
+
+    #[test]
+    fn loops() {
+        let mut board = Board::new();
+        board.mark(TOP_LEFT, Position::Top);
+        board.mark(TOP_LEFT, Position::Left);
+        board.mark(TOP_CENTER, Position::Top);
+        board.mark(TOP_CENTER, Position::Right);
+        board.mark(MIDDLE_LEFT, Position::Left);
+        board.mark(MIDDLE_LEFT, Position::Bottom);
+        board.mark(CENTER, Position::Bottom);
+        board.mark(CENTER, Position::Right);
+        // clutter
+        board.mark(BOTTOM_RIGHT, Position::Right);
+        board.mark(BOTTOM_RIGHT, Position::Bottom);
+        println!("{}", board);
+        println!();
+        println!();
+
+        println!("Loops = {}", board.get_loops().len());
     }
 }

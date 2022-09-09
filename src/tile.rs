@@ -336,7 +336,7 @@ pub struct ChainBuilder {
 impl ChainBuilder {
     pub fn new(first: Rc<RefCell<Tile>>) -> Self {
         Self {
-            tiles: vec![first.clone()],
+            tiles: vec![first],
             first_end_pos: None,
             second_end_pos: None,
         }
@@ -415,5 +415,61 @@ impl ChainBuilder {
 
 #[allow(dead_code)]
 pub struct Loop {
-    tiles: Vec<Rc<Tile>>,
+    tiles: Vec<Rc<RefCell<Tile>>>,
 }
+
+pub struct LoopBuilder {
+    tiles: Vec<Rc<RefCell<Tile>>>,
+}
+
+impl LoopBuilder {
+    pub fn new(first: Rc<RefCell<Tile>>) -> Self {
+        Self { tiles: vec![first] }
+    }
+
+    pub fn add(&mut self, tile: &Rc<RefCell<Tile>>) {
+        let tile_ref = tile.borrow();
+        if !tile_ref.is_path() {
+            panic!()
+        }
+
+        let last = self.tiles.last().unwrap();
+        let last_ref = last.borrow();
+
+        if !last_ref.connected_to(tile) {
+            panic!()
+        }
+
+        drop(last_ref);
+
+        self.tiles.push(tile.clone());
+    }
+
+    // Build the loop, consume the builder
+    pub fn build(self) -> Loop {
+        let len = self.tiles.len();
+
+        if len < 4 {
+            panic!()
+        }
+
+        // let last = self.tiles.last().unwrap();
+        let last = self.tiles.last().unwrap();
+        let first = self.tiles.first().unwrap();
+        if !first.borrow().connected_to(last) {
+            panic!()
+        }
+
+        Loop { tiles: self.tiles }
+    }
+}
+
+pub const TOP_LEFT: TileIndex = (0, 0);
+pub const TOP_CENTER: TileIndex = (0, 1);
+pub const TOP_RIGHT: TileIndex = (0, 2);
+pub const MIDDLE_LEFT: TileIndex = (1, 0);
+pub const CENTER: TileIndex = (1, 1);
+pub const MIDDLE_RIGHT: TileIndex = (1, 2);
+pub const BOTTOM_LEFT: TileIndex = (2, 0);
+pub const BOTTOM_CENTER: TileIndex = (2, 1);
+pub const BOTTOM_RIGHT: TileIndex = (2, 2);
