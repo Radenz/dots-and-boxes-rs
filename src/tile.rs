@@ -139,6 +139,10 @@ impl Tile {
         openings
     }
 
+    pub fn all_marked(&self) -> bool {
+        self.config.top && self.config.bottom && self.config.left && self.config.right
+    }
+
     pub fn is_in_edge(&self) -> bool {
         self.index != (1, 1)
     }

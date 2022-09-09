@@ -34,6 +34,13 @@ impl Board {
         }
     }
 
+    pub fn acquisitions(&self) -> Matrix<bool> {
+        self.tiles
+            .iter()
+            .map(|row| row.iter().map(|tile| tile.borrow().all_marked()).collect())
+            .collect()
+    }
+
     fn get_tile(&mut self, index: TileIndex) -> Rc<RefCell<Tile>> {
         self.tiles
             .get_mut(index.0)
@@ -710,5 +717,85 @@ mod tests {
         println!();
 
         println!("Loops = {}", board.get_loops().len());
+    }
+}
+
+pub struct Game {
+    board: Board,
+    turn: Player,
+    squares: Matrix<Option<Player>>,
+}
+
+impl Game {
+    pub fn new() -> Self {
+        Self {
+            board: Board::new(),
+            turn: Player::Odd,
+            squares: vec![
+                vec![None, None, None],
+                vec![None, None, None],
+                vec![None, None, None],
+            ],
+        }
+    }
+
+    pub fn play(&mut self, index: TileIndex, pos: Position) {
+        self.board.mark(index, pos);
+
+        let acquired_squares = self.board.acquisitions();
+        for x in 0..3 {
+            for y in 0..3 {
+                if let None = self.squares[x][y] {
+                    if acquired_squares[x][y] {
+                        self.squares[x][y] = Some(self.turn);
+                    }
+                }
+            }
+        }
+
+        self.switch();
+    }
+
+    // Calculate board setup utility value on certain player perspective
+    pub fn utility(&mut self, player: Player) -> i32 {
+        let chains = self.board.get_chains();
+        let loops = self.board.get_loops();
+
+        self.acquired_squares(player) - self.acquired_squares(player.opponent());
+        todo!()
+    }
+
+    fn acquired_squares(&self, player: Player) -> i32 {
+        let mut s = 0;
+        for row in self.squares.iter() {
+            for &sq in row.iter() {
+                if let Some(p) = sq {
+                    if p == player {
+                        s += 1;
+                    }
+                }
+            }
+        }
+
+        s
+    }
+
+    fn switch(&mut self) {
+        self.turn = self.turn.opponent();
+    }
+}
+
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+pub enum Player {
+    Odd,
+    Even,
+}
+
+impl Player {
+    pub fn opponent(&self) -> Player {
+        match *self {
+            Self::Odd => Self::Even,
+            Self::Even => Self::Odd,
+        }
     }
 }
