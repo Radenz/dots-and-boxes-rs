@@ -279,13 +279,26 @@ impl Board {
     pub fn safe_moves_count(&mut self) -> i32 {
         let mut safe_moves = 0;
 
+        for &moves in self.available_moves().iter() {
+            safe_moves += 1;
+
+            let (index, pos) = moves;
+            if self.will_make_end(index, pos) {
+                safe_moves -= 1;
+            }
+        }
+
+        safe_moves
+    }
+
+    pub fn available_moves(&mut self) -> Vec<(TileIndex, Position)> {
+        let mut moves = vec![];
+
         for x in 0..3 {
             for y in 0..3 {
                 let index = (x, y);
 
                 for &pos in POSITIONS.iter() {
-                    safe_moves += 1;
-
                     if x == 1 && pos.is_vertical() {
                         continue;
                     }
@@ -294,14 +307,14 @@ impl Board {
                         continue;
                     }
 
-                    if self.will_make_end(index, pos) {
-                        safe_moves -= 1;
+                    if self.get_tile(index).borrow().is_open(pos) {
+                        moves.push((index, pos));
                     }
                 }
             }
         }
 
-        safe_moves
+        moves
     }
 
     fn will_make_end(&mut self, mark_index: TileIndex, mark_pos: Position) -> bool {
@@ -323,6 +336,45 @@ impl Board {
 
         false
     }
+
+    pub fn print(&self, sq: &Matrix<Option<Player>>) {
+        for i in 0..3 {
+            println!(
+                "+{}+{}+{}+",
+                h_line(!self.tiles[i][0].borrow().is_open(Position::Top)),
+                h_line(!self.tiles[i][1].borrow().is_open(Position::Top)),
+                h_line(!self.tiles[i][2].borrow().is_open(Position::Top))
+            );
+            println!(
+                "{} {} {} {} {} {} {}",
+                v_line(!self.tiles[i][0].borrow().is_open(Position::Left)),
+                Self::sq_to_str(sq.get(i).unwrap().get(0).unwrap()),
+                v_line(!self.tiles[i][1].borrow().is_open(Position::Left)),
+                Self::sq_to_str(sq.get(i).unwrap().get(1).unwrap()),
+                v_line(!self.tiles[i][2].borrow().is_open(Position::Left)),
+                Self::sq_to_str(sq.get(i).unwrap().get(2).unwrap()),
+                v_line(!self.tiles[i][2].borrow().is_open(Position::Right)),
+            );
+        }
+        println!(
+            "+{}+{}+{}+",
+            h_line(!self.tiles[2][0].borrow().is_open(Position::Bottom)),
+            h_line(!self.tiles[2][1].borrow().is_open(Position::Bottom)),
+            h_line(!self.tiles[2][2].borrow().is_open(Position::Bottom))
+        );
+    }
+
+    fn sq_to_str(sq: &Option<Player>) -> &str {
+        if let &Some(p) = sq {
+            if p == Player::Odd {
+                return "O";
+            } else {
+                return "E";
+            }
+        }
+
+        " "
+    }
 }
 
 impl Clone for Board {
@@ -333,7 +385,7 @@ impl Clone for Board {
 
             for y in 0..3 {
                 let tile = &self.tiles[x][y];
-                row.push(Rc::new(RefCell::new(tile.borrow().clone())));
+                row.push(Rc::new(RefCell::new((*tile.borrow()).clone())));
             }
 
             tiles.push(row);
@@ -395,7 +447,10 @@ fn v_line(cond: bool) -> String {
 
 #[cfg(test)]
 mod tests {
-    use crate::tile::{Position, BOTTOM_RIGHT, CENTER, MIDDLE_LEFT, TOP_CENTER, TOP_LEFT};
+    use crate::{
+        board::{Game, Player},
+        tile::{Position, BOTTOM_RIGHT, CENTER, MIDDLE_LEFT, TOP_CENTER, TOP_LEFT},
+    };
 
     use super::Board;
 
@@ -423,24 +478,25 @@ mod tests {
 
     #[test]
     fn chain() {
-        let mut board = Board::new();
-        board.mark((0, 0), Position::Top);
-        board.mark((0, 0), Position::Bottom);
-        board.mark((0, 1), Position::Bottom);
-        board.mark((0, 1), Position::Right);
-        board.mark((0, 2), Position::Right);
-        board.mark((1, 0), Position::Left);
-        board.mark((1, 1), Position::Bottom);
-        board.mark((1, 2), Position::Bottom);
-        board.mark((1, 2), Position::Right);
-        board.mark((2, 0), Position::Right);
-        board.mark((2, 0), Position::Left);
-        board.mark((2, 2), Position::Bottom);
-        println!("{}", board);
-        println!();
-        println!();
+        let mut game = Game::new();
+        game.play((0, 0), Position::Top);
+        game.play((0, 0), Position::Bottom);
+        game.play((0, 1), Position::Bottom);
+        game.play((0, 1), Position::Right);
+        game.play((0, 2), Position::Right);
+        game.play((1, 0), Position::Left);
+        game.play((1, 1), Position::Bottom);
+        game.play((1, 2), Position::Bottom);
+        game.play((1, 2), Position::Right);
+        game.play((2, 0), Position::Right);
+        game.play((2, 0), Position::Left);
+        game.play((2, 2), Position::Bottom);
+        game.print_board();
 
-        println!("Chains = {}", board.get_chains().len());
+        // println!("Chains = {}", board.get_chains().len());
+
+        println!("U(Even) = {}", game.utility(Player::Even));
+        println!("U(Odd) = {}", game.utility(Player::Odd));
     }
 
     #[test]
@@ -488,62 +544,79 @@ impl Game {
         self.board.mark(index, pos);
 
         let acquired_squares = self.board.acquisitions();
+        let mut switching = true;
+
         for x in 0..3 {
             for y in 0..3 {
                 if let None = self.squares[x][y] {
                     if acquired_squares[x][y] {
                         self.squares[x][y] = Some(self.turn);
+                        switching = false;
                     }
                 }
             }
         }
 
-        self.switch();
+        if switching {
+            self.switch();
+        }
+    }
+
+    pub fn available_moves(&mut self) -> Vec<(TileIndex, Position)> {
+        self.board.available_moves()
+    }
+
+    pub fn player_to_play(&self) -> Player {
+        self.turn
     }
 
     // Calculate board setup utility value on certain player perspective
     pub fn utility(&mut self, player: Player) -> i32 {
-        let chains = self.board.get_chains();
-        let loops = self.board.get_loops();
+        // let chains = self.board.get_chains();
+        // let loops = self.board.get_loops();
 
-        let mut chain_values = 0;
-        let this_player_to_move = self.turn == player;
+        // let mut chain_values = 0;
+        // let this_player_to_move = self.turn == player;
 
-        let factor = -1_i32.pow(self.board.safe_moves_count() as u32 + 1) * {
-            if this_player_to_move {
-                1
-            } else {
-                -1
-            }
-        };
+        // let safe_moves = self.board.safe_moves_count() as u32;
+        // let factor = -1_i32.pow(safe_moves + 1) * {
+        //     if this_player_to_move {
+        //         1
+        //     } else {
+        //         -1
+        //     }
+        // };
 
-        for chain in chains.iter() {
-            if !chain.is_long() {
-                // 2-chain
-                if chain.is_closed() {
-                    chain_values += 2;
-                } else {
-                    chain_values -= 2;
-                }
-            } else {
-                // long chain
-                if chain.is_closed() {
-                    chain_values += chain.len()
-                } else if chain.is_half_open() {
-                    chain_values += chain.len() - 4;
-                } else {
-                    chain_values -= 4 - chain.len();
-                }
-            }
-        }
+        // let chains_count = chains.len();
+        // let double_cross_compensation = if chains_count > 1 { 4 } else { 0 };
+        // // TODO: Get full value of last chain
+        // for chain in chains.iter() {
+        //     if !chain.is_long() {
+        //         // 2-chain
+        //         if chain.is_closed() {
+        //             chain_values += 2;
+        //         } else {
+        //             chain_values -= 2;
+        //         }
+        //     } else {
+        //         // long chain
+        //         if chain.is_closed() {
+        //             chain_values += chain.len() as i32;
+        //         } else if chain.is_half_open() {
+        //             chain_values += chain.len() as i32 - double_cross_compensation;
+        //         } else {
+        //             chain_values -= double_cross_compensation - chain.len() as i32;
+        //         }
+        //     }
+        // }
 
-        let mut loop_values = 0;
-        for _loop in loops.iter() {
-            loop_values -= _loop.len();
-        }
+        // let mut loop_values = 0;
+        // for _loop in loops.iter() {
+        //     loop_values -= _loop.len() as i32;
+        // }
 
         self.acquired_squares(player) - self.acquired_squares(player.opponent())
-            + (chain_values as i32 + loop_values as i32 + self.board.free_edge_squares()) * factor
+        // + (chain_values + loop_values + self.board.free_edge_squares()) * factor
     }
 
     fn acquired_squares(&self, player: Player) -> i32 {
@@ -561,8 +634,53 @@ impl Game {
         s
     }
 
+    pub fn ended(&self) -> bool {
+        let mut acquired_squares = 0;
+
+        for row in self.squares.iter() {
+            for &sq in row.iter() {
+                if let Some(_) = sq {
+                    acquired_squares += 1;
+                }
+            }
+        }
+
+        acquired_squares == 9
+    }
+
     fn switch(&mut self) {
         self.turn = self.turn.opponent();
+    }
+
+    pub fn print_board(&self) {
+        self.print_board_without_pad();
+        println!();
+        println!();
+    }
+
+    pub fn print_board_without_pad(&self) {
+        self.board.print(&self.squares);
+    }
+}
+
+impl Clone for Game {
+    fn clone(&self) -> Self {
+        let mut squares = Vec::new();
+        for x in 0..3 {
+            let mut row = Vec::new();
+
+            for y in 0..3 {
+                row.push(self.squares[x][y].clone());
+            }
+
+            squares.push(row);
+        }
+
+        Self {
+            board: self.board.clone(),
+            turn: self.turn,
+            squares,
+        }
     }
 }
 
