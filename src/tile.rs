@@ -2,6 +2,7 @@ use std::{cell::RefCell, rc::Rc};
 
 pub type TileIndex = (usize, usize);
 
+#[derive(Debug, Clone, Copy)]
 pub struct Tile {
     index: TileIndex,
     config: TileConfig,
@@ -205,6 +206,7 @@ impl Tile {
     }
 }
 
+#[derive(Debug, Clone, Copy)]
 struct TileConfig {
     top: bool,
     bottom: bool,
@@ -313,6 +315,19 @@ impl Position {
             Self::Right => Position::Left,
         }
     }
+
+    pub fn is_vertical(&self) -> bool {
+        match *self {
+            Self::Top => true,
+            Self::Bottom => true,
+            Self::Left => false,
+            Self::Right => false,
+        }
+    }
+
+    pub fn is_horizontal(&self) -> bool {
+        !self.is_vertical()
+    }
 }
 
 pub const POSITIONS: [Position; 4] = [
@@ -329,7 +344,41 @@ pub struct Chain {
     tiles: Vec<Rc<RefCell<Tile>>>,
 }
 
-impl Chain {}
+impl Chain {
+    pub fn is_half_open(&self) -> bool {
+        self.openings_count() == 1
+    }
+
+    pub fn is_closed(&self) -> bool {
+        self.openings_count() == 0
+    }
+
+    pub fn is_open(&self) -> bool {
+        self.openings_count() == 2
+    }
+
+    pub fn is_long(&self) -> bool {
+        self.tiles.len() > 2
+    }
+
+    pub fn len(&self) -> usize {
+        self.tiles.len()
+    }
+
+    fn openings_count(&self) -> i32 {
+        let mut openings = 0;
+
+        if let Some(_) = self.first_end.1 {
+            openings += 1;
+        }
+
+        if let Some(_) = self.second_end.1 {
+            openings += 1;
+        }
+
+        openings
+    }
+}
 
 pub struct ChainBuilder {
     tiles: Vec<Rc<RefCell<Tile>>>,
@@ -420,6 +469,16 @@ impl ChainBuilder {
 #[allow(dead_code)]
 pub struct Loop {
     tiles: Vec<Rc<RefCell<Tile>>>,
+}
+
+impl Loop {
+    pub fn is_long(&self) -> bool {
+        self.tiles.len() > 4
+    }
+
+    pub fn len(&self) -> usize {
+        self.tiles.len()
+    }
 }
 
 pub struct LoopBuilder {

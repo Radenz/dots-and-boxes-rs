@@ -160,6 +160,26 @@ impl Board {
         loops
     }
 
+    pub fn free_edge_squares(&mut self) -> i32 {
+        let mut sq = 0;
+
+        for x in 0..3 {
+            for y in 0..3 {
+                let tile = self.get_tile((x, y));
+                let tile_ref = tile.borrow();
+
+                if tile_ref.is_end() {
+                    let opening = tile_ref.openings()[0];
+                    if !tile_ref.has_neighbor(opening) {
+                        sq += 1;
+                    }
+                }
+            }
+        }
+
+        sq
+    }
+
     fn get_connected_neighbor(
         &mut self,
         tile: Rc<RefCell<Tile>>,
@@ -254,6 +274,72 @@ impl Board {
                 return None;
             }
         }
+    }
+
+    pub fn safe_moves_count(&mut self) -> i32 {
+        let mut safe_moves = 0;
+
+        for x in 0..3 {
+            for y in 0..3 {
+                let index = (x, y);
+
+                for &pos in POSITIONS.iter() {
+                    safe_moves += 1;
+
+                    if x == 1 && pos.is_vertical() {
+                        continue;
+                    }
+
+                    if y == 1 && pos.is_horizontal() {
+                        continue;
+                    }
+
+                    if self.will_make_end(index, pos) {
+                        safe_moves -= 1;
+                    }
+                }
+            }
+        }
+
+        safe_moves
+    }
+
+    fn will_make_end(&mut self, mark_index: TileIndex, mark_pos: Position) -> bool {
+        let tile = self.get_tile(mark_index);
+        let tile_ref = tile.borrow();
+
+        if tile_ref.is_path() && tile_ref.is_open(mark_pos) {
+            return true;
+        }
+
+        if tile_ref.has_neighbor(mark_pos) {
+            let neighbor = self.get_tile(tile_ref.at_unchecked(mark_pos));
+            let neighbor_ref = neighbor.borrow();
+
+            if neighbor_ref.is_path() && neighbor_ref.is_open(mark_pos.invert()) {
+                return true;
+            }
+        }
+
+        false
+    }
+}
+
+impl Clone for Board {
+    fn clone(&self) -> Board {
+        let mut tiles = Vec::new();
+        for x in 0..3 {
+            let mut row = Vec::new();
+
+            for y in 0..3 {
+                let tile = &self.tiles[x][y];
+                row.push(Rc::new(RefCell::new(tile.borrow().clone())));
+            }
+
+            tiles.push(row);
+        }
+
+        Board { tiles }
     }
 }
 
@@ -420,8 +506,44 @@ impl Game {
         let chains = self.board.get_chains();
         let loops = self.board.get_loops();
 
-        self.acquired_squares(player) - self.acquired_squares(player.opponent());
-        todo!()
+        let mut chain_values = 0;
+        let this_player_to_move = self.turn == player;
+
+        let factor = -1_i32.pow(self.board.safe_moves_count() as u32 + 1) * {
+            if this_player_to_move {
+                1
+            } else {
+                -1
+            }
+        };
+
+        for chain in chains.iter() {
+            if !chain.is_long() {
+                // 2-chain
+                if chain.is_closed() {
+                    chain_values += 2;
+                } else {
+                    chain_values -= 2;
+                }
+            } else {
+                // long chain
+                if chain.is_closed() {
+                    chain_values += chain.len()
+                } else if chain.is_half_open() {
+                    chain_values += chain.len() - 4;
+                } else {
+                    chain_values -= 4 - chain.len();
+                }
+            }
+        }
+
+        let mut loop_values = 0;
+        for _loop in loops.iter() {
+            loop_values -= _loop.len();
+        }
+
+        self.acquired_squares(player) - self.acquired_squares(player.opponent())
+            + (chain_values as i32 + loop_values as i32 + self.board.free_edge_squares()) * factor
     }
 
     fn acquired_squares(&self, player: Player) -> i32 {
