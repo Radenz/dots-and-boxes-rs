@@ -1,8 +1,4 @@
-use std::{
-    cmp::{max, min},
-    ops::Deref,
-    rc::Rc,
-};
+use std::{ops::Deref, rc::Rc};
 
 use crate::{
     board::{Game, Player},
@@ -25,13 +21,12 @@ impl Agent {
     }
 
     pub fn ab_search(&mut self) -> (Action, i32) {
-        let mut alpha = i32::MIN;
-        let mut beta = i32::MAX;
-        // self.max(self.game.deref().clone(), &mut alpha, &mut beta)
+        let alpha = i32::MIN;
+        let beta = i32::MAX;
         self.max(self.game.deref().clone(), alpha, beta)
     }
 
-    fn max(&mut self, mut game: Game, mut alpha: i32, mut beta: i32) -> (Action, i32) {
+    fn max(&mut self, mut game: Game, mut alpha: i32, beta: i32) -> (Action, i32) {
         if self.turn != game.player_to_play() {
             panic!()
         }
@@ -84,7 +79,7 @@ impl Agent {
         (action, v)
     }
 
-    fn min(&mut self, mut game: Game, mut alpha: i32, mut beta: i32) -> (Action, i32) {
+    fn min(&mut self, mut game: Game, alpha: i32, mut beta: i32) -> (Action, i32) {
         if self.turn == game.player_to_play() {
             panic!()
         }
@@ -136,112 +131,6 @@ impl Agent {
 
         (action, v)
     }
-
-    // fn max(&mut self, mut game: Game, alpha: &mut i32, beta: &mut i32) -> (Action, i32) {
-    //     if self.turn != game.player_to_play() {
-    //         panic!()
-    //     }
-
-    //     if game.ended() {
-    //         if ENABLE_DEBUG {
-    //             let k = game.utility(self.turn);
-    //             Self::print_mv(&game, NULL_ACTION, k);
-    //         }
-
-    //         return (NULL_ACTION, game.utility(self.turn));
-    //     }
-
-    //     let mut action = NULL_ACTION;
-
-    //     let mut v = i32::MIN;
-    //     for (index, pos) in game.available_moves() {
-    //         let mut new_state = game.clone();
-    //         new_state.play(index, pos);
-
-    //         let f = if game.player_to_play() == new_state.player_to_play() {
-    //             Self::max
-    //         } else {
-    //             Self::min
-    //         };
-
-    //         let (_, val) = f(self, new_state, alpha, beta);
-
-    //         if val > v {
-    //             action = (index, pos);
-    //             v = val;
-    //         }
-
-    //         if v >= *beta {
-    //             if ENABLE_DEBUG {
-    //                 Self::print_mv(&game, (index, pos), v);
-    //             }
-    //             return ((index, pos), v);
-    //         }
-
-    //         if v > *alpha {
-    //             *alpha = v;
-    //         }
-    //     }
-
-    //     if ENABLE_DEBUG {
-    //         Self::print_mv(&game, action, v);
-    //     }
-
-    //     (action, v)
-    // }
-
-    // fn min(&mut self, mut game: Game, alpha: &mut i32, beta: &mut i32) -> (Action, i32) {
-    //     if self.turn == game.player_to_play() {
-    //         panic!()
-    //     }
-
-    //     if game.ended() {
-    //         if ENABLE_DEBUG {
-    //             let k = game.utility(self.turn);
-    //             Self::print_mv(&game, NULL_ACTION, k);
-    //         }
-
-    //         return (NULL_ACTION, game.utility(self.turn));
-    //     }
-
-    //     let mut action = NULL_ACTION;
-    //     let mut v = i32::MAX;
-    //     for (index, pos) in game.available_moves() {
-    //         let mut new_state = game.clone();
-    //         new_state.play(index, pos);
-
-    //         let f = if game.player_to_play() == new_state.player_to_play() {
-    //             Self::min
-    //         } else {
-    //             Self::max
-    //         };
-
-    //         let (_, val) = f(self, new_state, alpha, beta);
-
-    //         if val < v {
-    //             action = (index, pos);
-    //             v = val;
-    //         }
-
-    //         if v <= *alpha {
-    //             if ENABLE_DEBUG {
-    //                 Self::print_mv(&game, (index, pos), v);
-    //             }
-
-    //             return ((index, pos), v);
-    //         }
-
-    //         if v < *beta {
-    //             *beta = v;
-    //         }
-    //     }
-
-    //     if ENABLE_DEBUG {
-    //         Self::print_mv(&game, action, v);
-    //     }
-
-    //     (action, v)
-    // }
 
     fn print_mv(game: &Game, mv: Action, value: i32) {
         game.print_board_without_pad();
